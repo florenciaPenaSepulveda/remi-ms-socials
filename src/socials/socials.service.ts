@@ -1,61 +1,47 @@
 import { Injectable } from '@nestjs/common';
 import { CommentsService } from './comments.service';
-import { LikesService } from './likes.service';
+import { CookbookService } from './cookbook.service';
+import { CookedService } from './cooked.service';
+import { RatingsService } from './ratings.service';
 
 @Injectable()
 export class SocialsService {
   constructor(
-    private readonly likesService: LikesService,
-    private readonly commentsService: CommentsService,
+    private readonly ratings: RatingsService,
+    private readonly comments: CommentsService,
+    private readonly cookbook: CookbookService,
+    private readonly cooked: CookedService,
   ) {}
 
-  addLike(recipeId: string, userId: string) {
-    return this.likesService.addLike(recipeId, userId);
-  }
-
-  removeLike(recipeId: string, userId: string) {
-    return this.likesService.removeLike(recipeId, userId);
-  }
-
-  addDislike(recipeId: string, userId: string) {
-    return this.likesService.addDislike(recipeId, userId);
-  }
-
-  removeDislike(recipeId: string, userId: string) {
-    return this.likesService.removeDislike(recipeId, userId);
-  }
-
-  getStats(recipeId: string) {
-    return this.likesService.getStats(recipeId);
-  }
-
-  getUserReaction(recipeId: string, userId: string) {
-    return this.likesService.getUserReaction(recipeId, userId);
-  }
-
   async getStatsOfRecipes(recipeIds: string[], userId?: string) {
-    const [reacciones, comentarios] = await Promise.all([
-      this.likesService.getStatsOfRecipes(recipeIds, userId),
-      this.commentsService.countByRecipes(recipeIds),
-    ]);
+    const [puntuaciones, cocinadas, guardadas, comentarios] = await Promise.all(
+      [
+        this.ratings.resumenes(recipeIds, userId),
+        this.cooked.cookedCounts(recipeIds),
+        this.cookbook.savedCounts(recipeIds),
+        this.comments.countByRecipes(recipeIds),
+      ],
+    );
     return Object.fromEntries(
       recipeIds.map((id) => [
         id,
-        { ...reacciones[id], commentsCount: comentarios[id] },
+        {
+          ...puntuaciones[id],
+          cookedCount: cocinadas[id],
+          savedCount: guardadas[id],
+          commentsCount: comentarios[id],
+        },
       ]),
     );
   }
 
-  async getRecipeSocialStats(recipeId: string) {
-    const [stats, commentsCount] = await Promise.all([
-      this.likesService.getStats(recipeId),
-      this.commentsService.countCommentsByRecipe(recipeId),
-    ]);
-    return { ...stats, commentsCount };
-  }
-
-  async purgeRecipe(recipeId: string) {
-    await this.likesService.purge(recipeId);
-    return this.commentsService.purge(recipeId);
+  async purgeRecipe(recipeId: string, authorId: string) {
+    const puntuaciones = await this.ratings.purge(recipeId, authorId);
+    const comentarios = await this.comments.purge(recipeId);
+    return {
+      recipeId,
+      ...puntuaciones,
+      commentsRemoved: comentarios.commentsRemoved,
+    };
   }
 }
