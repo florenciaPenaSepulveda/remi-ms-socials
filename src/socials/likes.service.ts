@@ -1,138 +1,115 @@
-import { Injectable, OnModuleInit } from '@nestjs/common';
-import { RedisService } from '../redis/redis.service';
+import { Inject, Injectable } from '@nestjs/common';
+import Redis from 'ioredis';
+import { REDIS } from '../redis/redis.module';
+
+export type Reaccion = 'like' | 'dislike' | null;
+
+export interface ResumenDeReacciones {
+  likes: number;
+  dislikes: number;
+  reaction: Reaccion;
+}
+
+const claveDeLikes = (recipeId: string) => `recipe:${recipeId}:likes`;
+const claveDeDislikes = (recipeId: string) => `recipe:${recipeId}:dislikes`;
 
 @Injectable()
-export class LikesService implements OnModuleInit {
-  private redisClient: any;
+export class LikesService {
+  constructor(@Inject(REDIS) private readonly redis: Redis) {}
 
-  constructor(private readonly redis: RedisService) {}
-
-  async onModuleInit() {
-    this.redisClient = this.redis.getClient().redis;
+  async addLike(recipeId: string, userId: string) {
+    await this.redis
+      .multi()
+      .srem(claveDeDislikes(recipeId), userId)
+      .sadd(claveDeLikes(recipeId), userId)
+      .exec();
+    return this.resumen(recipeId, userId);
   }
 
-  // ========== USUARIOS REGISTRADOS ==========
-
-  async addLike(recipeId: string, userId: string): Promise<void> {
-    const userKey = `recipe:${recipeId}:likes:users`;
-    const dislikeUserKey = `recipe:${recipeId}:dislikes:users`;
-    
-    // Verificar si ya tiene like
-    const hasLike = await this.redisClient.sismember(userKey, userId);
-    if (hasLike === 1) return;
-
-    // Si tenía dislike, removerlo
-    const hasDislike = await this.redisClient.sismember(dislikeUserKey, userId);
-    if (hasDislike === 1) {
-      await this.redisClient.srem(dislikeUserKey, userId);
-      await this.redisClient.decr(`recipe:${recipeId}:dislikes`);
-    }
-
-    // Agregar like
-    await this.redisClient.sadd(userKey, userId);
-    await this.redisClient.incr(`recipe:${recipeId}:likes`);
+  async removeLike(recipeId: string, userId: string) {
+    await this.redis.srem(claveDeLikes(recipeId), userId);
+    return this.resumen(recipeId, userId);
   }
 
-  async removeLike(recipeId: string, userId: string): Promise<void> {
-    const userKey = `recipe:${recipeId}:likes:users`;
-    const removed = await this.redisClient.srem(userKey, userId);
-    
-    if (removed === 1) {
-      await this.redisClient.decr(`recipe:${recipeId}:likes`);
-    }
+  async addDislike(recipeId: string, userId: string) {
+    await this.redis
+      .multi()
+      .srem(claveDeLikes(recipeId), userId)
+      .sadd(claveDeDislikes(recipeId), userId)
+      .exec();
+    return this.resumen(recipeId, userId);
   }
 
-  async addDislike(recipeId: string, userId: string): Promise<void> {
-    const userKey = `recipe:${recipeId}:dislikes:users`;
-    const likeUserKey = `recipe:${recipeId}:likes:users`;
-    
-    // Verificar si ya tiene dislike
-    const hasDislike = await this.redisClient.sismember(userKey, userId);
-    if (hasDislike === 1) return;
-
-    // Si tenía like, removerlo
-    const hasLike = await this.redisClient.sismember(likeUserKey, userId);
-    if (hasLike === 1) {
-      await this.redisClient.srem(likeUserKey, userId);
-      await this.redisClient.decr(`recipe:${recipeId}:likes`);
-    }
-
-    // Agregar dislike
-    await this.redisClient.sadd(userKey, userId);
-    await this.redisClient.incr(`recipe:${recipeId}:dislikes`);
+  async removeDislike(recipeId: string, userId: string) {
+    await this.redis.srem(claveDeDislikes(recipeId), userId);
+    return this.resumen(recipeId, userId);
   }
 
-  async removeDislike(recipeId: string, userId: string): Promise<void> {
-    const userKey = `recipe:${recipeId}:dislikes:users`;
-    const removed = await this.redisClient.srem(userKey, userId);
-    
-    if (removed === 1) {
-      await this.redisClient.decr(`recipe:${recipeId}:dislikes`);
-    }
-  }
-
-  // ========== INVITADOS ==========
-
-  async incrementLikes(recipeId: string): Promise<void> {
-    await this.redisClient.incr(`recipe:${recipeId}:likes`);
-  }
-
-  async decrementLikes(recipeId: string): Promise<void> {
-    const current = await this.getLikesCount(recipeId);
-    if (current > 0) {
-      await this.redisClient.decr(`recipe:${recipeId}:likes`);
-    }
-  }
-
-  async incrementDislikes(recipeId: string): Promise<void> {
-    await this.redisClient.incr(`recipe:${recipeId}:dislikes`);
-  }
-
-  async decrementDislikes(recipeId: string): Promise<void> {
-    const current = await this.getDislikesCount(recipeId);
-    if (current > 0) {
-      await this.redisClient.decr(`recipe:${recipeId}:dislikes`);
-    }
-  }
-
-  // ========== CONSULTAS ==========
-
-  async getLikesCount(recipeId: string): Promise<number> {
-    const count = await this.redisClient.get(`recipe:${recipeId}:likes`);
-    return count ? parseInt(count, 10) : 0;
-  }
-
-  async getDislikesCount(recipeId: string): Promise<number> {
-    const count = await this.redisClient.get(`recipe:${recipeId}:dislikes`);
-    return count ? parseInt(count, 10) : 0;
-  }
-
-  async getStats(recipeId: string): Promise<{ likes: number; dislikes: number }> {
+  async getStats(recipeId: string) {
     const [likes, dislikes] = await Promise.all([
-      this.getLikesCount(recipeId),
-      this.getDislikesCount(recipeId),
+      this.redis.scard(claveDeLikes(recipeId)),
+      this.redis.scard(claveDeDislikes(recipeId)),
     ]);
     return { likes, dislikes };
   }
 
-  async userHasLiked(recipeId: string, userId: string): Promise<boolean> {
-    const userKey = `recipe:${recipeId}:likes:users`;
-    return (await this.redisClient.sismember(userKey, userId)) === 1;
-  }
-
-  async userHasDisliked(recipeId: string, userId: string): Promise<boolean> {
-    const userKey = `recipe:${recipeId}:dislikes:users`;
-    return (await this.redisClient.sismember(userKey, userId)) === 1;
-  }
-
-  async getUserReaction(recipeId: string, userId: string): Promise<'like' | 'dislike' | null> {
-    const [hasLike, hasDislike] = await Promise.all([
-      this.userHasLiked(recipeId, userId),
-      this.userHasDisliked(recipeId, userId),
+  async getUserReaction(recipeId: string, userId: string): Promise<Reaccion> {
+    const [leGusta, noLeGusta] = await Promise.all([
+      this.redis.sismember(claveDeLikes(recipeId), userId),
+      this.redis.sismember(claveDeDislikes(recipeId), userId),
     ]);
-    
-    if (hasLike) return 'like';
-    if (hasDislike) return 'dislike';
-    return null;
+    if (leGusta === 1) {
+      return 'like';
+    }
+    return noLeGusta === 1 ? 'dislike' : null;
+  }
+
+  async getStatsOfRecipes(
+    recipeIds: string[],
+    userId?: string,
+  ): Promise<Record<string, ResumenDeReacciones>> {
+    if (!recipeIds.length) {
+      return {};
+    }
+    const pipeline = this.redis.pipeline();
+    for (const id of recipeIds) {
+      pipeline.scard(claveDeLikes(id));
+      pipeline.scard(claveDeDislikes(id));
+      if (userId) {
+        pipeline.sismember(claveDeLikes(id), userId);
+        pipeline.sismember(claveDeDislikes(id), userId);
+      }
+    }
+    const respuestas = (await pipeline.exec()) ?? [];
+    const porReceta = userId ? 4 : 2;
+    return Object.fromEntries(
+      recipeIds.map((id, i) => {
+        const [likes, dislikes, leGusta, noLeGusta] = respuestas
+          .slice(i * porReceta, (i + 1) * porReceta)
+          .map(([, valor]) => Number(valor));
+        let reaction: Reaccion = null;
+        if (leGusta === 1) {
+          reaction = 'like';
+        } else if (noLeGusta === 1) {
+          reaction = 'dislike';
+        }
+        return [id, { likes, dislikes, reaction }];
+      }),
+    );
+  }
+
+  async purge(recipeId: string) {
+    await this.redis.del(claveDeLikes(recipeId), claveDeDislikes(recipeId));
+  }
+
+  private async resumen(
+    recipeId: string,
+    userId: string,
+  ): Promise<ResumenDeReacciones> {
+    const [stats, reaction] = await Promise.all([
+      this.getStats(recipeId),
+      this.getUserReaction(recipeId, userId),
+    ]);
+    return { ...stats, reaction };
   }
 }

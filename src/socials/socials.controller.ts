@@ -1,116 +1,94 @@
 import { Controller } from '@nestjs/common';
 import { MessagePattern, Payload } from '@nestjs/microservices';
+import {
+  AddCommentMessage,
+  DeleteCommentMessage,
+  ReactionMessage,
+  RecipeCommentsMessage,
+  RecipeIdMessage,
+  RecipesStatsMessage,
+  UpdateCommentMessage,
+  UserCommentsMessage,
+} from './dto/social.dto';
+import { CommentsService } from './comments.service';
 import { SocialsService } from './socials.service';
-import { AddLikeDto, AddDislikeDto, IncrementLikeDto, IncrementDislikeDto } from './dto/create-social.dto';
-import { AddCommentDto, UpdateCommentDto } from './dto/update-social.dto';
 
 @Controller()
 export class SocialsController {
-  constructor(private readonly socialsService: SocialsService) {}
-
-  // ========== LIKES/DISLIKES - USUARIOS REGISTRADOS ==========
+  constructor(
+    private readonly socialsService: SocialsService,
+    private readonly commentsService: CommentsService,
+  ) {}
 
   @MessagePattern({ cmd: 'add_like' })
-  addLike(@Payload() dto: AddLikeDto) {
-    console.log('📩 Usuario dio like a receta:', dto.recipeId);
-    return this.socialsService.addLike(dto.recipeId, dto.userId);
+  addLike(@Payload() { recipeId, userId }: ReactionMessage) {
+    return this.socialsService.addLike(recipeId, userId);
   }
 
   @MessagePattern({ cmd: 'remove_like' })
-  removeLike(@Payload() dto: AddLikeDto) {
-    console.log('📩 Usuario removió like de receta:', dto.recipeId);
-    return this.socialsService.removeLike(dto.recipeId, dto.userId);
+  removeLike(@Payload() { recipeId, userId }: ReactionMessage) {
+    return this.socialsService.removeLike(recipeId, userId);
   }
 
   @MessagePattern({ cmd: 'add_dislike' })
-  addDislike(@Payload() dto: AddDislikeDto) {
-    console.log('📩 Usuario dio dislike a receta:', dto.recipeId);
-    return this.socialsService.addDislike(dto.recipeId, dto.userId);
+  addDislike(@Payload() { recipeId, userId }: ReactionMessage) {
+    return this.socialsService.addDislike(recipeId, userId);
   }
 
   @MessagePattern({ cmd: 'remove_dislike' })
-  removeDislike(@Payload() dto: AddDislikeDto) {
-    console.log('📩 Usuario removió dislike de receta:', dto.recipeId);
-    return this.socialsService.removeDislike(dto.recipeId, dto.userId);
+  removeDislike(@Payload() { recipeId, userId }: ReactionMessage) {
+    return this.socialsService.removeDislike(recipeId, userId);
   }
-
-  // ========== LIKES/DISLIKES - INVITADOS ==========
-
-  @MessagePattern({ cmd: 'increment_likes' })
-  incrementLikes(@Payload() dto: IncrementLikeDto) {
-    console.log('📩 Invitado incrementó like en receta:', dto.recipeId);
-    return this.socialsService.incrementLikes(dto.recipeId);
-  }
-
-  @MessagePattern({ cmd: 'decrement_likes' })
-  decrementLikes(@Payload() dto: IncrementLikeDto) {
-    console.log('📩 Invitado decrementó like en receta:', dto.recipeId);
-    return this.socialsService.decrementLikes(dto.recipeId);
-  }
-
-  @MessagePattern({ cmd: 'increment_dislikes' })
-  incrementDislikes(@Payload() dto: IncrementDislikeDto) {
-    console.log('📩 Invitado incrementó dislike en receta:', dto.recipeId);
-    return this.socialsService.incrementDislikes(dto.recipeId);
-  }
-
-  @MessagePattern({ cmd: 'decrement_dislikes' })
-  decrementDislikes(@Payload() dto: IncrementDislikeDto) {
-    console.log('📩 Invitado decrementó dislike en receta:', dto.recipeId);
-    return this.socialsService.decrementDislikes(dto.recipeId);
-  }
-
-  // ========== CONSULTAS LIKES/DISLIKES ==========
 
   @MessagePattern({ cmd: 'get_recipe_stats' })
-  getStats(@Payload() recipeId: string) {
-    console.log('📩 Obteniendo stats de receta:', recipeId);
+  getStats(@Payload() { recipeId }: RecipeIdMessage) {
     return this.socialsService.getStats(recipeId);
   }
 
   @MessagePattern({ cmd: 'get_user_reaction' })
-  getUserReaction(@Payload() payload: { recipeId: string; userId: string }) {
-    console.log('📩 Obteniendo reacción de usuario en receta:', payload.recipeId);
-    return this.socialsService.getUserReaction(payload.recipeId, payload.userId);
+  getUserReaction(@Payload() { recipeId, userId }: ReactionMessage) {
+    return this.socialsService.getUserReaction(recipeId, userId);
   }
 
-  // ========== COMENTARIOS ==========
+  @MessagePattern({ cmd: 'get_recipes_stats' })
+  getRecipesStats(@Payload() { recipeIds, userId }: RecipesStatsMessage) {
+    return this.socialsService.getStatsOfRecipes(recipeIds, userId);
+  }
+
+  @MessagePattern({ cmd: 'get_recipe_social_stats' })
+  getRecipeSocialStats(@Payload() { recipeId }: RecipeIdMessage) {
+    return this.socialsService.getRecipeSocialStats(recipeId);
+  }
 
   @MessagePattern({ cmd: 'add_comment' })
-  addComment(@Payload() dto: AddCommentDto) {
-    console.log('📩 Usuario agregó comentario a receta:', dto.recipeId);
-    return this.socialsService.addComment(dto.recipeId, dto.userId, dto.text);
+  addComment(@Payload() { recipeId, userId, text }: AddCommentMessage) {
+    return this.commentsService.addComment(recipeId, userId, text);
   }
 
   @MessagePattern({ cmd: 'get_comments_by_recipe' })
-  getCommentsByRecipe(@Payload() recipeId: string) {
-    console.log('📩 Obteniendo comentarios de receta:', recipeId);
-    return this.socialsService.getCommentsByRecipe(recipeId);
-  }
-
-  @MessagePattern({ cmd: 'update_comment' })
-  updateComment(@Payload() dto: UpdateCommentDto) {
-    console.log('📩 Actualizando comentario:', dto.commentId);
-    return this.socialsService.updateComment(dto.commentId, dto.text);
-  }
-
-  @MessagePattern({ cmd: 'delete_comment' })
-  deleteComment(@Payload() commentId: string) {
-    console.log('📩 Eliminando comentario:', commentId);
-    return this.socialsService.deleteComment(commentId);
+  getCommentsByRecipe(
+    @Payload() { recipeId, limit, offset }: RecipeCommentsMessage,
+  ) {
+    return this.commentsService.getCommentsByRecipe(recipeId, limit, offset);
   }
 
   @MessagePattern({ cmd: 'get_comments_by_user' })
-  getCommentsByUser(@Payload() userId: string) {
-    console.log('📩 Obteniendo comentarios de usuario:', userId);
-    return this.socialsService.getCommentsByUser(userId);
+  getCommentsByUser(@Payload() { userId, limit, offset }: UserCommentsMessage) {
+    return this.commentsService.getCommentsByUser(userId, limit, offset);
   }
 
-  // ========== ESTADÍSTICAS COMPLETAS ==========
+  @MessagePattern({ cmd: 'update_comment' })
+  updateComment(@Payload() { commentId, userId, text }: UpdateCommentMessage) {
+    return this.commentsService.updateComment(commentId, userId, text);
+  }
 
-  @MessagePattern({ cmd: 'get_recipe_social_stats' })
-  getRecipeSocialStats(@Payload() recipeId: string) {
-    console.log('📩 Obteniendo estadísticas sociales completas de receta:', recipeId);
-    return this.socialsService.getRecipeSocialStats(recipeId);
+  @MessagePattern({ cmd: 'delete_comment' })
+  deleteComment(@Payload() { commentId, userId }: DeleteCommentMessage) {
+    return this.commentsService.deleteComment(commentId, userId);
+  }
+
+  @MessagePattern({ cmd: 'purge_recipe_social' })
+  purgeRecipe(@Payload() { recipeId }: RecipeIdMessage) {
+    return this.socialsService.purgeRecipe(recipeId);
   }
 }
