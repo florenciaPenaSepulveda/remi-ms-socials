@@ -4,6 +4,19 @@
 
 Microservicio de **Remi Recetas** que guarda lo que hace la comunidad alrededor de las recetas: puntuaciones, comentarios, el recetario personal (listas), lo que cada persona cocinó y el impacto contra el desperdicio. No expone HTTP: escucha mensajes en una cola de RabbitMQ y responde al [gateway](https://github.com/florenciaPenaSepulveda/remi-gateway). Hecho con NestJS 11 y Redis.
 
+## Inicio rápido
+
+Necesita: Redis y RabbitMQ (`docker compose up -d` en `remi-gateway`).
+
+```bash
+cp .env.example .env
+npm ci
+npm run start:dev
+npm test
+```
+
+39 pruebas, 99 % de cobertura.
+
 ## Repositorios del sistema
 
 | Repositorio | Función |
