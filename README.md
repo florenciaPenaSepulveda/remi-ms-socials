@@ -106,7 +106,7 @@ npm run test:cov
 npm run lint
 ```
 
-Las pruebas levantan el servicio completo (validación y errores incluidos) sobre transporte TCP y lo consultan como lo haría el gateway; necesitan un Redis en `REDIS_URL` (por defecto `redis://localhost:6380/14`, la base 14) y la vacían antes de cada prueba, así que no la apuntes a una base con datos. El CI ejecuta lint, compilación y pruebas con cobertura.
+Las pruebas levantan el servicio completo (validación y errores incluidos) sobre transporte TCP y lo consultan como lo haría el gateway; necesitan un Redis en `REDIS_URL` (por defecto `redis://localhost:6379/14`, la base 14) y la vacían antes de cada prueba, así que no la apuntes a una base con datos. El CI ejecuta lint, compilación y pruebas con cobertura.
 
 ## Docker
 
